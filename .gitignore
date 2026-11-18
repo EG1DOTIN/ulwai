@@ -1,0 +1,28 @@
+# Core ignored directories & files per instructions
+.agent/
+.trash-dir/
+build/
+AGENTS.md
+
+# Build artifacts & CMake cache
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+.cache/
+
+# Compiled libraries & binaries
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Local configs, temp files & history
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/

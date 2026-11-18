@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#181e29" />
+      <stop offset="100%" stop-color="#0c0f14" />
+    </linearGradient>
+
+    <!-- Emerald-Mint Neon Gradient -->
+    <linearGradient id="mintGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffb2" />
+      <stop offset="45%" stop-color="#00e599" />
+      <stop offset="100%" stop-color="#10a37f" />
+    </linearGradient>
+
+    <!-- Electric Cyan Gradient Highlight -->
+    <linearGradient id="cyanGlow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00e599" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.95" />
+    </linearGradient>
+
+    <!-- Ambient Glow Filter -->
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="ambientBgGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="60" />
+    </filter>
+  </defs>
+
+  <!-- Base Squircle Container -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgGrad)" stroke="#273244" stroke-width="6" />
+
+  <!-- Subtle Interior Ambient Glow -->
+  <circle cx="256" cy="256" r="140" fill="#00e599" opacity="0.12" filter="url(#ambientBgGlow)" />
+
+  <!-- ULWAI Geometric 'U' + Pulse/Lightning Icon Mark -->
+  <g filter="url(#neonGlow)">
+    <!-- Left Stem of U (sharp bevel top) -->
+    <path d="M 148 138 
+             L 194 138 
+             L 194 292 
+             C 194 332, 222 358, 256 358 
+             C 290 358, 318 332, 318 292 
+             L 318 190 
+             L 364 190 
+             L 364 292 
+             C 364 362, 316 404, 256 404 
+             C 196 404, 148 362, 148 292 
+             Z" 
+          fill="url(#mintGrad)" />
+
+    <!-- Lightning / Pulse Dynamic Core Overlay (Intertwined High-Speed Bolt) -->
+    <polygon points="274,120 220,236 268,236 238,348 322,216 274,216" 
+             fill="url(#cyanGlow)" 
+             opacity="0.95" />
+  </g>
+
+  <!-- Clean Precision Dot Accents -->
+  <circle cx="171" cy="116" r="8" fill="#00ffb2" />
+  <circle cx="341" cy="168" r="8" fill="#38bdf8" />
+</svg>

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 120" width="100%" height="100%">
+  <defs>
+    <!-- Emerald-Mint Gradient -->
+    <linearGradient id="logoMint" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffb2" />
+      <stop offset="50%" stop-color="#00e599" />
+      <stop offset="100%" stop-color="#10a37f" />
+    </linearGradient>
+
+    <!-- Electric Cyan Gradient -->
+    <linearGradient id="logoCyan" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00e599" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+
+    <filter id="logoGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Embedded Icon Mark on Left (Center: 60, 60) -->
+  <g transform="translate(16, 16) scale(0.171875)">
+    <!-- Squircle container -->
+    <rect x="16" y="16" width="480" height="480" rx="112" fill="#151a23" stroke="#252f40" stroke-width="12" />
+    <!-- U-Shape -->
+    <path d="M 148 138 L 194 138 L 194 292 C 194 332, 222 358, 256 358 C 290 358, 318 332, 318 292 L 318 190 L 364 190 L 364 292 C 364 362, 316 404, 256 404 C 196 404, 148 362, 148 292 Z" fill="url(#logoMint)" />
+    <!-- Lightning core -->
+    <polygon points="274,120 220,236 268,236 238,348 322,216 274,216" fill="url(#logoCyan)" />
+  </g>
+
+  <!-- Wordmark Text: 'ULWAI' in bold white -->
+  <text x="126" y="74" 
+        fill="#FFFFFF" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="46" 
+        font-weight="900" 
+        letter-spacing="2">ULWAI</text>
+
+  <!-- Subtitle Text: 'AI AGENT' in emerald teal / mint -->
+  <text x="318" y="74" 
+        fill="url(#logoMint)" 
+        filter="url(#logoGlow)"
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="46" 
+        font-weight="700" 
+        letter-spacing="3.5">AI AGENT</text>
+</svg>

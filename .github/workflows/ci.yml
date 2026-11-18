@@ -1,0 +1,237 @@
+name: CI / CD Multi-Platform Build & Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build & Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: linux-x86_64
+          - os: macos-latest
+            artifact_name: macos
+          - os: windows-latest
+            artifact_name: windows-x64
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Project Version
+        id: version
+        shell: bash
+        run: |
+          if [ -f "VERSION" ]; then
+            VER=$(tr -d '[:space:]' < VERSION)
+          else
+            VER="2.0.0"
+          fi
+          echo "ULWAI_VERSION=${VER}" >> $GITHUB_ENV
+          echo "Extracted version: ${VER}"
+
+      # ─── Linux Setup ──────────────────────────────────────────────────────────
+      - name: Setup Linux Dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libcurl4-openssl-dev qt6-base-dev
+
+      # ─── macOS Setup ──────────────────────────────────────────────────────────
+      - name: Setup macOS Dependencies (Homebrew)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake curl qt@6
+          QT6_PATH=$(brew --prefix qt@6)
+          CURL_PATH=$(brew --prefix curl)
+          echo "CMAKE_PREFIX_PATH=${QT6_PATH};${CURL_PATH}" >> $GITHUB_ENV
+          echo "${QT6_PATH}/bin" >> $GITHUB_PATH
+
+      # ─── Windows Setup ────────────────────────────────────────────────────────
+      - name: Setup Qt 6 (Windows MSVC)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtbase'
+
+      - name: Setup CURL via vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          vcpkg install curl:x64-windows
+          $vcpkgBin = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin"
+          echo "$vcpkgBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ─── CMake Configuration ──────────────────────────────────────────────────
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_GUI=ON
+
+      - name: Configure CMake (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_GUI=ON -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}"
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_TESTS=ON `
+            -DBUILD_GUI=ON `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      # ─── Compilation ──────────────────────────────────────────────────────────
+      - name: Build All Targets
+        run: |
+          cmake --build build --config Release --parallel
+
+      # ─── Test Suite Execution ─────────────────────────────────────────────────
+      - name: Run Core Test Suite
+        run: |
+          ctest --test-dir build --output-on-failure -C Release
+
+      # ─── Packaging Executables ────────────────────────────────────────────────
+      - name: Package Executables (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          PKG_NAME="ulwai-v${ULWAI_VERSION}-linux-x86_64"
+          DIST_DIR="dist/${PKG_NAME}"
+          mkdir -p "${DIST_DIR}"
+          mkdir -p dist-package
+          cp build/ulw-ai-agent "${DIST_DIR}/"
+          cp build/ulwai "${DIST_DIR}/"
+          cp build/ulwai-cli "${DIST_DIR}/"
+          cp README.md LICENSE "${DIST_DIR}/"
+          chmod +x ${DIST_DIR}/ulw*
+          tar -czf "dist-package/${PKG_NAME}.tar.gz" -C dist "${PKG_NAME}"
+
+      - name: Package Executables (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          PKG_NAME="ulwai-v${ULWAI_VERSION}-macos"
+          DIST_DIR="dist/${PKG_NAME}"
+          mkdir -p "${DIST_DIR}"
+          mkdir -p dist-package
+          cp build/ulw-ai-agent "${DIST_DIR}/"
+          cp build/ulwai "${DIST_DIR}/"
+          cp build/ulwai-cli "${DIST_DIR}/"
+          cp README.md LICENSE "${DIST_DIR}/"
+          chmod +x ${DIST_DIR}/ulw*
+          tar -czf "dist-package/${PKG_NAME}.tar.gz" -C dist "${PKG_NAME}"
+
+      - name: Package Executables (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PKG_NAME = "ulwai-v$env:ULWAI_VERSION-windows-x64"
+          $DIST_DIR = "dist/$PKG_NAME"
+          New-Item -ItemType Directory -Force -Path $DIST_DIR
+          New-Item -ItemType Directory -Force -Path dist-package
+
+          # Copy binaries
+          Copy-Item "build/Release/ulw-ai-agent.exe" -Destination $DIST_DIR
+          Copy-Item "build/Release/ulwai.exe" -Destination $DIST_DIR
+          Copy-Item "build/Release/ulwai-cli.exe" -Destination $DIST_DIR
+          Copy-Item "README.md" -Destination $DIST_DIR
+          Copy-Item "LICENSE" -Destination $DIST_DIR
+
+          # Deploy Qt runtime dependencies using windeployqt
+          windeployqt --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
+
+          # Copy vcpkg dynamic libraries (libcurl.dll and dependencies)
+          $VCPKG_BIN = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin"
+          if (Test-Path $VCPKG_BIN) {
+              Copy-Item "$VCPKG_BIN/*.dll" -Destination $DIST_DIR -Force
+          }
+
+          # Archive into self-contained zip package
+          Compress-Archive -Path "$DIST_DIR/*" -DestinationPath "dist-package/$PKG_NAME.zip"
+
+      # ─── Upload Per-Platform Artifacts ────────────────────────────────────────
+      - name: Upload Platform Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ulwai-binaries-${{ matrix.artifact_name }}
+          path: dist-package/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ─── Release Job (Runs on Main Push / PR Merge or Version Tag) ───────────────
+  release:
+    name: Publish Release Binaries
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Platform Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: ulwai-binaries-*
+          merge-multiple: true
+
+      - name: Generate Checksums
+        working-directory: release-assets
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Determine Release Metadata
+        id: meta
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=ULWAI AI Agent ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+          else
+            echo "TAG_NAME=latest-build" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=ULWAI AI Agent - Continuous Build (v${VERSION})" >> $GITHUB_OUTPUT
+            echo "PRERELEASE=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.meta.outputs.TAG_NAME }}
+          name: ${{ steps.meta.outputs.RELEASE_NAME }}
+          draft: false
+          prerelease: ${{ steps.meta.outputs.PRERELEASE == 'true' }}
+          make_latest: ${{ steps.meta.outputs.PRERELEASE == 'false' }}
+          generate_release_notes: true
+          files: |
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/SHA256SUMS.txt
