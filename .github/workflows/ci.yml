@@ -70,14 +70,36 @@ jobs:
         with:
           arch: x64
 
-      - name: Setup Qt 6 (Windows MSVC)
+      - name: Setup Python for Qt Installer (Windows)
         if: runner.os == 'Windows'
-        uses: jurplel/install-qt-action@v4
+        uses: actions/setup-python@v5
         with:
-          version: '6.7.2'
-          target: 'desktop'
-          arch: 'win64_msvc2022_64'
-          cache: true
+          python-version: '3.11'
+
+      - name: Cache Qt 6 (Windows)
+        if: runner.os == 'Windows'
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: C:\Qt\6.7.2\msvc2022_64
+          key: qt6-6.7.2-win64_msvc2022_64
+
+      - name: Install Qt 6 via aqtinstall (Windows)
+        if: runner.os == 'Windows' && steps.cache-qt.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip aqtinstall
+          python -m aqt install-qt --outputdir "C:\Qt" windows desktop 6.7.2 win64_msvc2022_64
+
+      - name: Configure Qt 6 Environment (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $qtDir = "C:\Qt\6.7.2\msvc2022_64"
+          echo "QT_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Qt6_DIR=$qtDir\lib\cmake\Qt6" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CMAKE_PREFIX_PATH=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "$qtDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Setup CURL via vcpkg (Windows)
         if: runner.os == 'Windows'
@@ -107,7 +129,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_TESTS=ON `
             -DBUILD_GUI=ON `
-            -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
+            -DCMAKE_PREFIX_PATH="C:\Qt\6.7.2\msvc2022_64" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows
 
@@ -167,10 +189,11 @@ jobs:
           Copy-Item "LICENSE" -Destination $DIST_DIR
 
           # Deploy Qt runtime dependencies using windeployqt
-          if (Get-Command windeployqt -ErrorAction SilentlyContinue) {
+          $windeploy = "C:\Qt\6.7.2\msvc2022_64\bin\windeployqt.exe"
+          if (Test-Path $windeploy) {
+              & $windeploy --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
+          } elseif (Get-Command windeployqt -ErrorAction SilentlyContinue) {
               windeployqt --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
-          } elseif (Test-Path "$env:QT_DIR/bin/windeployqt.exe") {
-              & "$env:QT_DIR/bin/windeployqt.exe" --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
           }
 
           # Copy vcpkg dynamic libraries (libcurl.dll and dependencies)
