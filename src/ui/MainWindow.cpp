@@ -60,6 +60,7 @@
 #include <malloc.h>
 #elif defined(__APPLE__)
 #include <mach/mach.h>
+#include <mach/task_info.h>
 #endif
 
 namespace ulwai::ui {

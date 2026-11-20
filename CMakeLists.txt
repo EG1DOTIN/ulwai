@@ -163,7 +163,6 @@ target_include_directories(ulwai_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/deps
-        ${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/include
 )
 target_link_libraries(ulwai_core
     PUBLIC
@@ -172,7 +171,7 @@ target_link_libraries(ulwai_core
         ${CMAKE_DL_LIBS}
 )
 if(WIN32)
-    target_link_libraries(ulwai_core PUBLIC user32 shell32)
+    target_link_libraries(ulwai_core PUBLIC user32 shell32 psapi)
 endif()
 target_compile_definitions(ulwai_core
     PUBLIC
