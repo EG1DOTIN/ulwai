@@ -21,6 +21,7 @@ compile_commands.json
 *.exe
 
 # Local configs, temp files & history
+*.log
 *.swp
 *~
 .DS_Store

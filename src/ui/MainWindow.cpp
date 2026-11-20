@@ -58,6 +58,8 @@
 #elif defined(__linux__)
 #include <unistd.h>
 #include <malloc.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
 #endif
 
 namespace ulwai::ui {
@@ -989,6 +991,12 @@ void MainWindow::updateMemoryUsageLabel() {
     PROCESS_MEMORY_COUNTERS pmc;
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
         memMb = pmc.WorkingSetSize / (1024 * 1024);
+    }
+#elif defined(__APPLE__)
+    struct mach_task_basic_info info;
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) == KERN_SUCCESS) {
+        memMb = static_cast<long>(info.resident_size / (1024 * 1024));
     }
 #endif
 
