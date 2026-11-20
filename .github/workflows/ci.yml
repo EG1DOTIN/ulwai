@@ -8,6 +8,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -56,20 +59,25 @@ jobs:
       - name: Setup macOS Dependencies (Homebrew)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake curl qt@6
-          QT6_PATH=$(brew --prefix qt@6)
-          CURL_PATH=$(brew --prefix curl)
-          echo "CMAKE_PREFIX_PATH=${QT6_PATH};${CURL_PATH}" >> $GITHUB_ENV
-          echo "${QT6_PATH}/bin" >> $GITHUB_PATH
+          brew install qt@6
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
+          echo "$(brew --prefix qt@6)/bin" >> $GITHUB_PATH
 
       # ─── Windows Setup ────────────────────────────────────────────────────────
+      - name: Setup MSVC Toolchain
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Setup Qt 6 (Windows MSVC)
         if: runner.os == 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.2'
+          target: 'desktop'
           arch: 'win64_msvc2022_64'
-          modules: 'qtbase'
+          cache: true
 
       - name: Setup CURL via vcpkg (Windows)
         if: runner.os == 'Windows'
@@ -88,16 +96,18 @@ jobs:
       - name: Configure CMake (macOS)
         if: runner.os == 'macOS'
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_GUI=ON -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_GUI=ON -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
 
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cmake -B build `
+            -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_TESTS=ON `
             -DBUILD_GUI=ON `
+            -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows
 
@@ -157,7 +167,11 @@ jobs:
           Copy-Item "LICENSE" -Destination $DIST_DIR
 
           # Deploy Qt runtime dependencies using windeployqt
-          windeployqt --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
+          if (Get-Command windeployqt -ErrorAction SilentlyContinue) {
+              windeployqt --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
+          } elseif (Test-Path "$env:QT_DIR/bin/windeployqt.exe") {
+              & "$env:QT_DIR/bin/windeployqt.exe" --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
+          }
 
           # Copy vcpkg dynamic libraries (libcurl.dll and dependencies)
           $VCPKG_BIN = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin"
