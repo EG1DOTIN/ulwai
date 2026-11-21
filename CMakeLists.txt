@@ -173,6 +173,16 @@ target_link_libraries(ulwai_core
 if(WIN32)
     target_link_libraries(ulwai_core PUBLIC user32 shell32 psapi)
 endif()
+if(APPLE)
+    find_library(CORE_FOUNDATION CoreFoundation)
+    find_library(SECURITY Security)
+    if(CORE_FOUNDATION)
+        target_link_libraries(ulwai_core PUBLIC ${CORE_FOUNDATION})
+    endif()
+    if(SECURITY)
+        target_link_libraries(ulwai_core PUBLIC ${SECURITY})
+    endif()
+endif()
 target_compile_definitions(ulwai_core
     PUBLIC
         ULWAI_VERSION_STRING="${ULWAI_VERSION}"
@@ -201,6 +211,15 @@ if(GUI_AVAILABLE)
         AUTORCC ON
         AUTOUIC ON
     )
+    if(APPLE)
+        set_target_properties(${ULWAI_PROJECT_NAME} PROPERTIES
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_BUNDLE_NAME "ULWAI AI Agent"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "in.eg1.ulwai"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${ULWAI_VERSION}"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${ULWAI_VERSION}"
+        )
+    endif()
     target_link_libraries(${ULWAI_PROJECT_NAME}
         PRIVATE
             ${QT_LIBRARIES}
