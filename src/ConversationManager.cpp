@@ -526,8 +526,12 @@ size_t ConversationManager::importConversationsJson(const std::string& jsonConte
             if (v.is_number()) {
                 double ct = v.get<double>();
                 time_t t = static_cast<time_t>(ct);
-                struct tm tm_buf;
+                struct tm tm_buf{};
+#if defined(_WIN32)
+                localtime_s(&tm_buf, &t);
+#else
                 localtime_r(&t, &tm_buf);
+#endif
                 char buf[64];
                 strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_buf);
                 return std::string(buf);
