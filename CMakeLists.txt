@@ -256,6 +256,7 @@ target_link_libraries(ulwai-cli
 
 # Installation rules
 install(TARGETS ${ULWAI_PROJECT_NAME} ulwai ulwai-cli
+    BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
 

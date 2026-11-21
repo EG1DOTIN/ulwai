@@ -99,10 +99,10 @@ if [ -d "${APP_BUNDLE}" ]; then
         "${MACDEPLOYQT}" "${APP_BUNDLE}" -always-overwrite -dmg || true
     fi
 
-    # Locate generated DMG
-    DMG_GENERATED="${BUILD_DIR}/ulw-ai-agent.dmg"
+    # Locate generated DMG dynamically
+    DMG_GENERATED=$(find "${BUILD_DIR}" -maxdepth 2 -name "*.dmg" -print -quit 2>/dev/null || true)
     FINAL_DMG="${DIST_DIR}/ULWAI-v${VERSION}-macos.dmg"
-    if [ -f "${DMG_GENERATED}" ]; then
+    if [ -n "${DMG_GENERATED}" ] && [ -f "${DMG_GENERATED}" ]; then
         mv "${DMG_GENERATED}" "${FINAL_DMG}"
         echo "  -> Created DMG: ${FINAL_DMG}"
     fi
