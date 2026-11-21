@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# ULWAI AI Agent - Portable AppRun Launcher
+# Configures isolated runtime paths for bundled Qt6 libraries and plugins.
+# ==============================================================================
+
+set -e
+
+# Resolve absolute AppDir directory
+HERE="$(dirname "$(readlink -f "${0}")")"
+
+export APPDIR="${HERE}"
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+
+# Configure Qt6 runtime plugin paths
+export QT_PLUGIN_PATH="${HERE}/usr/plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+
+# Ensure proper font rendering and fontconfig fallback
+if [ -d "${HERE}/etc/fonts" ]; then
+    export FONTCONFIG_PATH="${HERE}/etc/fonts"
+fi
+
+# Determine whether to execute CLI or GUI binary based on invocation name or flags
+INVOKED_NAME="$(basename "${0}")"
+
+if [ "${INVOKED_NAME}" = "ulwai-cli" ]; then
+    exec "${HERE}/usr/bin/ulwai-cli" "$@"
+elif [ "$1" = "--cli" ]; then
+    exec "${HERE}/usr/bin/ulw-ai-agent" "$@"
+else
+    exec "${HERE}/usr/bin/ulw-ai-agent" "$@"
+fi

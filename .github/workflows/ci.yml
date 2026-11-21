@@ -1,4 +1,4 @@
-name: CI / CD Multi-Platform Build & Release
+name: Portable Multi-Platform Build & Release
 
 on:
   push:
@@ -16,243 +16,140 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    name: Build & Package (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_name: linux-x86_64
-          - os: macos-latest
-            artifact_name: macos
-          - os: windows-latest
-            artifact_name: windows-x64
-
+  # ─── Linux Portable AppImage & Tarball ──────────────────────────────────────
+  build-linux:
+    name: Linux Portable AppImage (ubuntu-latest)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Extract Project Version
-        id: version
-        shell: bash
-        run: |
-          if [ -f "VERSION" ]; then
-            VER=$(tr -d '[:space:]' < VERSION)
-          else
-            VER="2.0.0"
-          fi
-          echo "ULWAI_VERSION=${VER}" >> $GITHUB_ENV
-          echo "Extracted version: ${VER}"
-
-      # ─── Linux Setup ──────────────────────────────────────────────────────────
-      - name: Setup Linux Dependencies (Ubuntu)
-        if: runner.os == 'Linux'
+      - name: Install Linux Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential libcurl4-openssl-dev qt6-base-dev
 
-      # ─── macOS Setup ──────────────────────────────────────────────────────────
-      - name: Setup macOS Dependencies (Homebrew)
-        if: runner.os == 'macOS'
+      - name: Build Portable Linux AppImage & Tarball
         run: |
-          brew install qt@6
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
-          echo "$(brew --prefix qt@6)/bin" >> $GITHUB_PATH
+          chmod +x packaging/linux/build_appimage.sh
+          ./packaging/linux/build_appimage.sh
 
-      # ─── Windows Setup ────────────────────────────────────────────────────────
-      - name: Setup MSVC Toolchain
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Setup Python for Qt Installer (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Cache Qt 6 (Windows)
-        if: runner.os == 'Windows'
-        id: cache-qt
-        uses: actions/cache@v4
-        with:
-          path: C:\Qt\6.8.2\msvc2022_64
-          key: qt6-6.8.2-win64_msvc2022_64
-
-      - name: Install Qt 6 via aqtinstall (Windows)
-        if: runner.os == 'Windows' && steps.cache-qt.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip aqtinstall
-          python -m aqt install-qt --outputdir "C:\Qt" windows desktop 6.8.2 win64_msvc2022_64
-
-      - name: Configure Qt 6 Environment (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $qtDir = "C:/Qt/6.8.2/msvc2022_64"
-          echo "QT_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "Qt6_DIR=$qtDir/lib/cmake/Qt6" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "CMAKE_PREFIX_PATH=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "C:\Qt\6.8.2\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Setup CURL via vcpkg (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $vcpkgRoot = if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path "$env:VCPKG_INSTALLATION_ROOT")) {
-              $env:VCPKG_INSTALLATION_ROOT
-          } elseif (Test-Path "C:\vcpkg") {
-              "C:\vcpkg"
-          } else {
-              Split-Path (Get-Command vcpkg).Source -Parent
-          }
-          echo "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          vcpkg install curl:x64-windows
-          $vcpkgBin = "$vcpkgRoot\installed\x64-windows\bin"
-          echo "$vcpkgBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      # ─── CMake Configuration ──────────────────────────────────────────────────
-      - name: Configure CMake (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_GUI=ON
-
-      - name: Configure CMake (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_GUI=ON -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
-
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $qtDir = "C:/Qt/6.8.2/msvc2022_64"
-          $vcpkgDir = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT.Replace('\', '/') } else { "C:/vcpkg" }
-          $toolchain = "$vcpkgDir/scripts/buildsystems/vcpkg.cmake"
-
-          cmake -B build `
-            -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DBUILD_TESTS=ON `
-            -DBUILD_GUI=ON `
-            -DCMAKE_PREFIX_PATH="$qtDir;$vcpkgDir/installed/x64-windows" `
-            -DQt6_DIR="$qtDir/lib/cmake/Qt6" `
-            -DCMAKE_TOOLCHAIN_FILE="$toolchain" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows
-
-      # ─── Compilation ──────────────────────────────────────────────────────────
-      - name: Build All Targets
-        run: |
-          cmake --build build --config Release --parallel --verbose
-
-      # ─── Test Suite Execution ─────────────────────────────────────────────────
-      - name: Run Core Test Suite
-        run: |
-          ctest --test-dir build --output-on-failure -C Release
-
-      # ─── Packaging Executables ────────────────────────────────────────────────
-      - name: Package Executables (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          PKG_NAME="ulwai-v${ULWAI_VERSION}-linux-x86_64"
-          DIST_DIR="dist/${PKG_NAME}"
-          mkdir -p "${DIST_DIR}"
-          mkdir -p dist-package
-          cp build/ulw-ai-agent "${DIST_DIR}/"
-          cp build/ulwai "${DIST_DIR}/"
-          cp build/ulwai-cli "${DIST_DIR}/"
-          cp README.md LICENSE "${DIST_DIR}/"
-          chmod +x ${DIST_DIR}/ulw*
-          tar -czf "dist-package/${PKG_NAME}.tar.gz" -C dist "${PKG_NAME}"
-
-      - name: Package Executables (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          PKG_NAME="ulwai-v${ULWAI_VERSION}-macos"
-          DIST_DIR="dist/${PKG_NAME}"
-          mkdir -p "${DIST_DIR}"
-          mkdir -p dist-package
-          cp build/ulw-ai-agent "${DIST_DIR}/"
-          cp build/ulwai "${DIST_DIR}/"
-          cp build/ulwai-cli "${DIST_DIR}/"
-          cp README.md LICENSE "${DIST_DIR}/"
-          chmod +x ${DIST_DIR}/ulw*
-          tar -czf "dist-package/${PKG_NAME}.tar.gz" -C dist "${PKG_NAME}"
-
-      - name: Package Executables (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $PKG_NAME = "ulwai-v$env:ULWAI_VERSION-windows-x64"
-          $DIST_DIR = "dist/$PKG_NAME"
-          New-Item -ItemType Directory -Force -Path $DIST_DIR
-          New-Item -ItemType Directory -Force -Path dist-package
-
-          # Copy binaries
-          Copy-Item "build/Release/ulw-ai-agent.exe" -Destination $DIST_DIR
-          Copy-Item "build/Release/ulwai.exe" -Destination $DIST_DIR
-          Copy-Item "build/Release/ulwai-cli.exe" -Destination $DIST_DIR
-          Copy-Item "README.md" -Destination $DIST_DIR
-          Copy-Item "LICENSE" -Destination $DIST_DIR
-
-          # Deploy Qt runtime dependencies using windeployqt
-          $windeploy = "C:\Qt\6.8.2\msvc2022_64\bin\windeployqt.exe"
-          if (Test-Path $windeploy) {
-              & $windeploy --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
-          } elseif (Get-Command windeployqt -ErrorAction SilentlyContinue) {
-              windeployqt --release --no-translations --compiler-runtime "$DIST_DIR/ulw-ai-agent.exe"
-          }
-
-          # Copy vcpkg dynamic libraries (libcurl.dll and dependencies)
-          $vcpkgDir = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { "C:\vcpkg" }
-          $VCPKG_BIN = "$vcpkgDir\installed\x64-windows\bin"
-          if (Test-Path $VCPKG_BIN) {
-              Copy-Item "$VCPKG_BIN/*.dll" -Destination $DIST_DIR -Force
-          }
-
-          # Archive into self-contained zip package
-          Compress-Archive -Path "$DIST_DIR/*" -DestinationPath "dist-package/$PKG_NAME.zip"
-
-      # ─── Upload Per-Platform Artifacts ────────────────────────────────────────
-      - name: Upload Platform Package Artifact
+      - name: Upload Linux Portable Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ulwai-binaries-${{ matrix.artifact_name }}
-          path: dist-package/*
-          if-no-files-found: error
+          name: ulwai-linux-portable
+          path: packaging/dist/*
           retention-days: 14
 
-  # ─── Release Job (Runs on Main Push / PR Merge or Version Tag) ───────────────
+  # ─── Windows Portable MinGW-w64 Setup ───────────────────────────────────────
+  build-windows:
+    name: Windows Portable MinGW-w64 (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup MinGW-w64 Toolchain
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: Setup Qt 6 (MinGW-w64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_mingw'
+          modules: 'qtbase'
+
+      - name: Extract Project Version
+        id: version
+        shell: pwsh
+        run: |
+          if (Test-Path "VERSION") {
+            $ver = (Get-Content "VERSION").Trim()
+          } else {
+            $ver = "2.0.0"
+          }
+          echo "ULWAI_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Configure CMake with MinGW
+        shell: pwsh
+        run: |
+          cmake -B build-mingw `
+            -G "MinGW Makefiles" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_GUI=ON `
+            -DBUILD_TESTS=OFF
+
+      - name: Compile Windows Executables
+        shell: pwsh
+        run: |
+          cmake --build build-mingw --config Release --parallel
+
+      - name: Package Portable Windows Distribution
+        shell: pwsh
+        run: |
+          $DIST_NAME = "ulwai-v$env:ULWAI_VERSION-windows-x64-portable"
+          $STAGE = "build\stage\$DIST_NAME"
+          New-Item -ItemType Directory -Force -Path $STAGE
+          New-Item -ItemType Directory -Force -Path "packaging\dist"
+
+          # Copy binaries and assets
+          Copy-Item "build-mingw\ulw-ai-agent.exe" -Destination $STAGE
+          Copy-Item "build-mingw\ulwai.exe" -Destination $STAGE
+          Copy-Item "build-mingw\ulwai-cli.exe" -Destination $STAGE
+          Copy-Item "README.md" -Destination $STAGE
+          Copy-Item "LICENSE" -Destination $STAGE
+          if (Test-Path "resources") {
+            Copy-Item -Recurse "resources" -Destination $STAGE
+          }
+
+          # Deploy runtime dependencies using windeployqt
+          windeployqt --release --no-translations --compiler-runtime "$STAGE\ulw-ai-agent.exe"
+
+          # Compress into portable zip
+          Compress-Archive -Path "$STAGE\*" -DestinationPath "packaging\dist\$DIST_NAME.zip"
+
+      - name: Upload Windows Portable Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ulwai-windows-portable
+          path: packaging\dist\*.zip
+          retention-days: 14
+
+  # ─── Publish Release Binaries ───────────────────────────────────────────────
   release:
-    name: Publish Release Binaries
-    needs: build
-    runs-on: ubuntu-latest
+    name: Publish Release Packages
+    needs: [build-linux, build-windows]
     if: |
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+      always() &&
+      (needs.build-linux.result == 'success' || needs.build-windows.result == 'success') &&
+      ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+       startsWith(github.ref, 'refs/tags/v') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download All Platform Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-          pattern: ulwai-binaries-*
           merge-multiple: true
 
-      - name: Generate Checksums
+      - name: Generate Global Checksums
         working-directory: release-assets
         run: |
+          rm -f SHA256SUMS.txt
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
@@ -267,7 +164,7 @@ jobs:
             echo "PRERELEASE=false" >> $GITHUB_OUTPUT
           else
             echo "TAG_NAME=latest-build" >> $GITHUB_OUTPUT
-            echo "RELEASE_NAME=ULWAI AI Agent - Continuous Build (v${VERSION})" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=ULWAI AI Agent - Portable Continuous Build (v${VERSION})" >> $GITHUB_OUTPUT
             echo "PRERELEASE=true" >> $GITHUB_OUTPUT
           fi
 
@@ -283,6 +180,4 @@ jobs:
           make_latest: ${{ steps.meta.outputs.PRERELEASE == 'false' }}
           generate_release_notes: true
           files: |
-            release-assets/*.tar.gz
-            release-assets/*.zip
-            release-assets/SHA256SUMS.txt
+            release-assets/*

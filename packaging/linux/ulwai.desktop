@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=ULWAI AI Agent
+GenericName=AI Desktop Assistant
+Comment=Ultra-Lightweight C++ AI Agent for Desktop & Terminal (sub-100MB RAM)
+Exec=ulw-ai-agent %U
+Icon=ulwai
+Categories=Utility;Development;Network;
+Terminal=false
+StartupNotify=true
+StartupWMClass=ulw-ai-agent
+Keywords=AI;Agent;Assistant;ChatGPT;LLM;C++;
+MimeType=x-scheme-handler/ulwai;

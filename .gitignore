@@ -2,6 +2,9 @@
 .agent/
 .trash-dir/
 build/
+build-*/
+packaging/dist/
+*.AppImage
 AGENTS.md
 
 # Build artifacts & CMake cache
