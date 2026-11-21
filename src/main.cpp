@@ -38,6 +38,13 @@
 #include <cstdlib>
 #include <string>
 
+#if defined(_WIN32)
+#include <process.h>
+#define getpid _getpid
+#else
+#include <unistd.h>
+#endif
+
 #ifdef ULWAI_ENABLE_GUI
 #include <QApplication>
 #include <QFont>
